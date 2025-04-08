@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulario de Entrega de Equipos</title>
+    <!-- Ensure libraries load before our script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/4.1.4/signature_pad.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <style>
+        /* ... (keep your existing CSS) ... */
+        :root {
+            --primary-color: #0056b3;
+            --secondary-color: #f8f9fa;
+            --accent-color: #28a745;
+            --text-color: #333;
+            --border-color: #dee2e6;
+            --error-color: #dc3545;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .company-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .company-header h1 {
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        .company-header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        h2 {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box; /* Added for better sizing */
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2);
+        }
+
+        .error {
+            color: var(--error-color);
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .signature-container {
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            position: relative; /* Needed for canvas sizing */
+            height: 200px; /* Give container a height */
+        }
+
+        #signatureCanvas {
+            /* width: 100%; */ /* Let JS handle width */
+            /* height: 200px; */ /* Let JS handle height */
+            background-color: #fff;
+            cursor: crosshair;
+            display: block; /* Remove extra space below canvas */
+            position: absolute; /* Position canvas within container */
+            top: 0;
+            left: 0;
+        }
+
+        .signature-buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover:not(:disabled) { /* Added :not(:disabled) */
+            background-color: #004494;
+        }
+
+        button.secondary {
+            background-color: #6c757d;
+        }
+
+        button.secondary:hover:not(:disabled) { /* Added :not(:disabled) */
+            background-color: #5a6268;
+        }
+
+        button.success {
+            background-color: var(--accent-color);
+        }
+
+        button.success:hover:not(:disabled) { /* Added :not(:disabled) */
+            background-color: #218838;
+        }
+
+        button:disabled { /* Style for disabled buttons */
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+
+        .checkbox-group {
+            margin-top: 15px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            gap: 15px;
+        }
+
+        .preview-container {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--secondary-color);
+            display: none; /* Initially hidden */
+        }
+
+        .preview-title {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary-color);
+        }
+
+        .preview-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 4px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 4px;
+            color: white;
+            background-color: var(--accent-color);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: none;
+            z-index: 1000;
+            animation: slideIn 0.3s forwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+
+        /* Estilos para la vista previa del PDF */
+        #pdfPreview {
+            width: 100%;
+            height: 500px;
+            border: 1px solid var(--border-color);
+            margin-top: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        /* Estilos para el modal de configuración */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            overflow: auto; /* Added for scroll if needed */
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: black;
+        }
+
+        .config-form {
+            margin-top: 20px;
+        }
+
+        .config-form .form-group {
+            margin-bottom: 15px;
+        }
+
+        .overlay {
+            /* display: none; */ /* Controlled by JS */
+            position: fixed;
+            z-index: 3000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="company-header">
+            <h1>Formulario de Entrega de Equipos</h1>
+            <p>Complete todos los campos para confirmar la entrega del equipo al cliente</p>
+        </div>
+
+        <form id="entregaForm">
+            <h2>Datos del Instalador</h2>
+
+            <div class="form-group">
+                <label for="nombreInstalador">Nombre y Apellidos *</label>
+                <input type="text" id="nombreInstalador" name="nombreInstalador" required>
+                <div class="error" id="errorNombreInstalador">Por favor, introduce tu nombre completo</div>
+            </div>
+
+            <div class="form-group">
+                <label for="emailInstalador">Correo Electrónico *</label>
+                <input type="email" id="emailInstalador" name="emailInstalador" required>
+                <div class="error" id="errorEmailInstalador">Por favor, introduce un correo electrónico válido</div>
+            </div>
+
+            <h2>Datos del Equipo (Administrador)</h2>
+
+            <div class="form-group">
+                <label for="modeloEquipo">Modelo del Equipo *</label>
+                <select id="modeloEquipo" name="modeloEquipo" required>
+                    <option value="">Selecciona un modelo</option>
+                    <option value="iPhone 13">iPhone 13</option>
+                    <option value="iPhone 14">iPhone 14</option>
+                    <option value="iPhone 15">iPhone 15</option>
+                    <option value="Samsung Galaxy S22">Samsung Galaxy S22</option>
+                    <option value="Samsung Galaxy S23">Samsung Galaxy S23</option>
+                    <option value="Samsung Galaxy S24">Samsung Galaxy S24</option>
+                    <option value="Google Pixel 7">Google Pixel 7</option>
+                    <option value="Google Pixel 8">Google Pixel 8</option>
+                    <option value="Otro">Otro</option>
+                </select>
+                <div class="error" id="errorModeloEquipo">Por favor, selecciona un modelo de equipo</div>
+            </div>
+
+            <div class="form-group" id="otroModeloContainer" style="display: none;">
+                <label for="otroModelo">Especificar Otro Modelo *</label>
+                <input type="text" id="otroModelo" name="otroModelo">
+                <div class="error" id="errorOtroModelo">Por favor, especifica el modelo</div>
+            </div>
+
+            <div class="form-group">
+                <label>Elementos Entregados *</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="itemEquipo" name="elementosEntregados" value="Equipo móvil" checked disabled>
+                        <label for="itemEquipo">Equipo móvil</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="itemCargador" name="elementosEntregados" value="Cargador">
+                        <label for="itemCargador">Cargador</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="itemFunda" name="elementosEntregados" value="Funda protectora">
+                        <label for="itemFunda">Funda protectora</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="itemProtector" name="elementosEntregados" value="Protector de pantalla">
+                        <label for="itemProtector">Protector de pantalla</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="itemAuriculares" name="elementosEntregados" value="Auriculares">
+                        <label for="itemAuriculares">Auriculares</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="itemManual" name="elementosEntregados" value="Manual de usuario">
+                        <label for="itemManual">Manual de usuario</label>
+                    </div>
+                </div>
+                <div class="error" id="errorElementos">Selecciona al menos un elemento entregado (además del equipo)</div> <!-- Adjusted error message slightly -->
+            </div>
+
+            <div class="form-group">
+                <label for="numeroSerie">Número de Serie del Equipo</label>
+                <input type="text" id="numeroSerie" name="numeroSerie">
+            </div>
+
+            <h2>Firma del Instalador</h2>
+
+            <div class="form-group">
+                <label for="signatureCanvas">Firma *</label>
+                <div class="signature-container">
+                    <canvas id="signatureCanvas"></canvas>
+                </div>
+                <div class="error" id="errorFirma">La firma es obligatoria</div>
+                <div class="signature-buttons">
+                    <button type="button" id="clearSignature" class="secondary">Borrar Firma</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="observaciones">Observaciones</label>
+                <textarea id="observaciones" name="observaciones" rows="4"></textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" id="previewBtn" class="secondary">Vista Previa</button>
+                <button type="submit" id="submitBtn" class="success">Confirmar Entrega</button>
+            </div>
+        </form>
+
+        <div class="preview-container" id="previewContainer">
+            <h3 class="preview-title">Vista Previa del Documento</h3>
+            <div class="preview-content" id="previewContent"></div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button type="button" id="closePreviewBtn" class="secondary">Cerrar Vista Previa</button> <!-- Changed ID slightly -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de configuración de Supabase -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <span class="close">×</span>
+            <h2>Configuración de Supabase</h2>
+            <p>Introduce tus credenciales de Supabase para conectar con la base de datos.</p>
+
+            <form id="configForm" class="config-form">
+                <div class="form-group">
+                    <label for="supabaseUrl">URL de Supabase *</label>
+                    <input type="url" id="supabaseUrl" name="supabaseUrl" value="https://mcosnjhxznjwrjtnxerf.supabase.co" required placeholder="">
+                </div>
+
+                <div class="form-group">
+                    <label for="supabaseKey">API Key (anon public) de Supabase *</label>
+                    <input type="text" id="supabaseKey" name="supabaseKey" value ="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jb3Nuamh4em5qd3JqdG54ZXJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxMjAyNDQsImV4cCI6MjA1OTY5NjI0NH0.Ai9TvTFGerchZjL1WSA7wFJkwkspo3Jsb3-nmei-_vo" required placeholder="">
+                </div>
+
+                <button type="submit" class="success">Guardar Configuración</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay" class="overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Procesando la entrega...</p>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // Ensure the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+
+            // --- Get DOM Elements ---
+            const configModal = document.getElementById('configModal');
+            const closeBtn = document.querySelector('#configModal .close');
+            const configForm = document.getElementById('configForm');
+            const entregaForm = document.getElementById('entregaForm');
+            const canvas = document.getElementById('signatureCanvas');
+            const clearSignatureBtn = document.getElementById('clearSignature');
+            const modeloEquipoSelect = document.getElementById('modeloEquipo');
+            const otroModeloContainer = document.getElementById('otroModeloContainer');
+            const otroModeloInput = document.getElementById('otroModelo');
+            const previewBtn = document.getElementById('previewBtn');
+            const submitBtn = document.getElementById('submitBtn');
+            const previewContainer = document.getElementById('previewContainer');
+            const previewContent = document.getElementById('previewContent');
+            const closePreviewBtn = document.getElementById('closePreviewBtn');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const notification = document.getElementById('notification');
+            const supabaseUrlInput = document.getElementById('supabaseUrl');
+            const supabaseKeyInput = document.getElementById('supabaseKey');
+
+            // --- Global Variables ---
+            let supabase = null;
+            let signaturePad = null; // Initialize later
+
+            // --- Supabase Configuration ---
+            let storedSupabaseUrl = localStorage.getItem('supabaseUrl');
+            let storedSupabaseKey = localStorage.getItem('supabaseKey');
+
+            function disableFormActions() {
+                previewBtn.disabled = true;
+                submitBtn.disabled = true;
+                clearSignatureBtn.disabled = true;
+                // Consider disabling other form inputs if needed
+            }
+
+            function enableFormActions() {
+                previewBtn.disabled = false;
+                submitBtn.disabled = false;
+                clearSignatureBtn.disabled = false;
+            }
+
+            function initSupabase(url, key) {
+                try {
+                    // Use the global supabase-js object
+                    supabase = supabase.createClient(url, key);
+                    console.log('Supabase inicializado correctamente');
+                    enableFormActions(); // Enable buttons once Supabase is ready
+                    return true;
+                } catch (error) {
+                    console.error('Error al inicializar Supabase:', error);
+                    showNotification(`Error al inicializar Supabase: ${error.message}`, false);
+                    disableFormActions(); // Keep buttons disabled on error
+                    return false;
+                }
+            }
+
+            // Initial check for Supabase config
+            if (!storedSupabaseUrl || !storedSupabaseKey) {
+                configModal.style.display = 'block';
+                disableFormActions(); // Disable buttons until configured
+            } else {
+                supabaseUrlInput.value = storedSupabaseUrl; // Pre-fill for user convenience
+                supabaseKeyInput.value = storedSupabaseKey;
+                if (!initSupabase(storedSupabaseUrl, storedSupabaseKey)) {
+                     // If init fails with stored credentials, show modal again
+                     configModal.style.display = 'block';
+                }
+            }
+
+            // --- Modal Handling ---
+            closeBtn.onclick = function() {
+                configModal.style.display = 'none';
+            }
+            window.onclick = function(event) {
+                if (event.target == configModal) {
+                    configModal.style.display = 'none';
+                }
+            }
+
+            configForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const url = supabaseUrlInput.value.trim();
+                const key = supabaseKeyInput.value.trim();
+
+                if (url && key) {
+                     // Attempt to initialize
+                     if (initSupabase(url, key)) {
+                        localStorage.setItem('supabaseUrl', url);
+                        localStorage.setItem('supabaseKey', key);
+                        configModal.style.display = 'none';
+                        showNotification('Configuración de Supabase guardada correctamente.');
+                     } else {
+                        // Keep modal open if init failed
+                         showNotification('No se pudo conectar a Supabase. Verifica la URL y la Key.', false);
+                     }
+                } else {
+                    showNotification('Por favor, introduce URL y Key de Supabase.', false);
+                }
+            });
+
+
+            // --- Signature Pad Initialization ---
+            function initializeSignaturePad() {
+                try {
+                    // Check if SignaturePad library is loaded
+                    if (typeof SignaturePad === 'undefined') {
+                        console.error("SignaturePad library not loaded!");
+                        showNotification("Error: No se pudo cargar la funcionalidad de firma.", false);
+                        disableFormActions();
+                        return;
+                    }
+                    signaturePad = new SignaturePad(canvas, {
+                        backgroundColor: 'rgb(255, 255, 255)',
+                        penColor: 'rgb(0, 0, 0)'
+                    });
+                    resizeCanvas(); // Initial resize
+                    console.log("SignaturePad Initialized");
+                } catch(error) {
+                    console.error("Error initializing SignaturePad:", error);
+                    showNotification(`Error al inicializar la firma: ${error.message}`, false);
+                     disableFormActions();
+                }
+            }
+
+            function resizeCanvas() {
+                 if (!signaturePad) return; // Don't resize if pad not initialized
+                 try {
+                    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                    const container = canvas.parentElement; // Get the container
+                    canvas.width = container.offsetWidth * ratio;
+                    canvas.height = container.offsetHeight * ratio;
+                    canvas.getContext("2d").scale(ratio, ratio);
+                    signaturePad.clear(); // Clear after resize
+                    console.log("Canvas Resized");
+                 } catch(error) {
+                     console.error("Error resizing canvas:", error);
+                     // Optional: notify user or just log
+                 }
+            }
+
+            window.addEventListener("resize", resizeCanvas);
+            initializeSignaturePad(); // Initialize after DOM is ready
+
+            clearSignatureBtn.addEventListener('click', function() {
+                 if (signaturePad) {
+                    signaturePad.clear();
+                 }
+            });
+
+
+            // --- Form Logic ---
+            modeloEquipoSelect.addEventListener('change', function() {
+                if (this.value === 'Otro') {
+                    otroModeloContainer.style.display = 'block';
+                    otroModeloInput.required = true;
+                } else {
+                    otroModeloContainer.style.display = 'none';
+                    otroModeloInput.required = false;
+                    otroModeloInput.value = ''; // Clear if hidden
+                }
+            });
+
+            function showNotification(message, isSuccess = true) {
+                notification.textContent = message;
+                notification.style.backgroundColor = isSuccess ? 'var(--accent-color)' : 'var(--error-color)';
+                notification.style.display = 'block';
+                notification.style.animation = 'none'; // Reset animation
+                void notification.offsetWidth; // Trigger reflow
+                notification.style.animation = 'slideIn 0.3s forwards'; // Start animation
+
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 5000);
+            }
+
+             function clearErrors() {
+                const errorDivs = document.querySelectorAll('.error');
+                errorDivs.forEach(div => div.style.display = 'none');
+            }
+
+            function validateForm() {
+                clearErrors(); // Clear previous errors
+                let isValid = true;
+
+                // Validate nombre
+                const nombreInstalador = document.getElementById('nombreInstalador');
+                if (!nombreInstalador.value.trim()) {
+                    document.getElementById('errorNombreInstalador').style.display = 'block';
+                    isValid = false;
+                }
+
+                // Validate email
+                const emailInstalador = document.getElementById('emailInstalador');
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailInstalador.value.trim() || !emailPattern.test(emailInstalador.value)) {
+                    document.getElementById('errorEmailInstalador').style.display = 'block';
+                    isValid = false;
+                }
+
+                // Validate modelo de equipo
+                if (!modeloEquipoSelect.value) {
+                    document.getElementById('errorModeloEquipo').style.display = 'block';
+                    isValid = false;
+                } else if (modeloEquipoSelect.value === 'Otro') {
+                    if (!otroModeloInput.value.trim()) {
+                        document.getElementById('errorOtroModelo').style.display = 'block';
+                        isValid = false;
+                    }
+                }
+
+                 // Validate elementos (at least one besides the default 'Equipo móvil')
+                const elementosCheckboxes = document.querySelectorAll('input[name="elementosEntregados"]:checked');
+                if (elementosCheckboxes.length <= 1) { // Only the disabled 'Equipo móvil' or none selected
+                     // Check if ONLY the disabled one is checked
+                     let onlyDisabledChecked = true;
+                     elementosCheckboxes.forEach(cb => {
+                         if (!cb.disabled) onlyDisabledChecked = false;
+                     });
+                     if (onlyDisabledChecked && elementosCheckboxes.length === 1 || elementosCheckboxes.length === 0) {
+                        document.getElementById('errorElementos').style.display = 'block';
+                        //isValid = false; // Decide if this is strictly required
+                     }
+                }
+
+
+                // Validate firma
+                if (!signaturePad || signaturePad.isEmpty()) {
+                    document.getElementById('errorFirma').style.display = 'block';
+                    isValid = false;
+                }
+
+                return isValid;
+            }
+
+            function collectFormData() {
+                const modeloEquipoValue = modeloEquipoSelect.value;
+                let modeloFinal = modeloEquipoValue;
+
+                if (modeloEquipoValue === 'Otro') {
+                    modeloFinal = otroModeloInput.value.trim();
+                }
+
+                const elementosCheckboxes = document.querySelectorAll('input[name="elementosEntregados"]:checked');
+                const elementosEntregados = Array.from(elementosCheckboxes).map(cb => cb.value);
+
+                const now = new Date();
+                const fechaEntrega = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric'});
+                const horaEntrega = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                let signatureDataUrl = '';
+                if (signaturePad && !signaturePad.isEmpty()) {
+                    signatureDataUrl = signaturePad.toDataURL('image/png'); // Use image/png for better compatibility
+                }
+
+                return {
+                    nombreInstalador: document.getElementById('nombreInstalador').value.trim(),
+                    emailInstalador: document.getElementById('emailInstalador').value.trim(),
+                    modeloEquipo: modeloFinal,
+                    // Always include "Equipo móvil" if the checkbox is present and checked (even if disabled)
+                    elementosEntregados: elementosEntregados.join(', '),
+                    numeroSerie: document.getElementById('numeroSerie').value.trim() || null, // Use null if empty
+                    observaciones: document.getElementById('observaciones').value.trim() || null, // Use null if empty
+                    fechaEntrega: fechaEntrega,
+                    horaEntrega: horaEntrega,
+                    firmaDataUrl: signatureDataUrl, // Will be empty string if signature is empty
+                    fechaRegistro: now.toISOString() // ISO string for database timestamp
+                };
+            }
+
+             function generateDocumentHTML(data) {
+                 // Make sure data exists and has expected properties
+                 if (!data) return '<p>Error: No hay datos para mostrar.</p>';
+
+                 // Basic check for firmaDataUrl to prevent broken image tag
+                 const firmaImage = data.firmaDataUrl
+                     ? `<img src="${data.firmaDataUrl}" style="max-width: 250px; height: auto; border: 1px solid #dee2e6; margin-top: 10px; display: block;" alt="Firma del instalador">`
+                     : '<p><em>Firma no proporcionada</em></p>';
+
+                 return `
+                    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; font-size: 11pt; max-width: 600px; margin: auto;">
+                        <div style="text-align: center; margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+                            <h2 style="color: #0056b3; margin: 0 0 5px 0;">Confirmación de Entrega de Equipo</h2>
+                            <p style="color: #666; font-size: 0.9em; margin: 0;">Documento de entrega E4E Soluciones</p>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <h3 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px; font-size: 1.1em; color: #0056b3; margin-top: 0;">Datos del Instalador</h3>
+                            <p style="margin: 5px 0;"><strong>Nombre:</strong> ${data.nombreInstalador || 'N/A'}</p>
+                            <p style="margin: 5px 0;"><strong>Correo Electrónico:</strong> ${data.emailInstalador || 'N/A'}</p>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <h3 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px; font-size: 1.1em; color: #0056b3;">Datos del Equipo</h3>
+                            <p style="margin: 5px 0;"><strong>Modelo:</strong> ${data.modeloEquipo || 'N/A'}</p>
+                            <p style="margin: 5px 0;"><strong>Número de Serie:</strong> ${data.numeroSerie || 'No especificado'}</p>
+                            <p style="margin: 5px 0;"><strong>Elementos Entregados:</strong> ${data.elementosEntregados || 'Equipo móvil'}</p>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <h3 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px; font-size: 1.1em; color: #0056b3;">Observaciones</h3>
+                            <p style="margin: 5px 0;">${data.observaciones || 'Sin observaciones'}</p>
+                        </div>
+
+                        <div style="margin-bottom: 25px;">
+                            <h3 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px; font-size: 1.1em; color: #0056b3;">Fecha y Hora de Entrega</h3>
+                            <p style="margin: 5px 0;"><strong>Fecha:</strong> ${data.fechaEntrega || 'N/A'}</p>
+                            <p style="margin: 5px 0;"><strong>Hora:</strong> ${data.horaEntrega || 'N/A'}</p>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h3 style="border-bottom: 1px solid #dee2e6; padding-bottom: 5px; font-size: 1.1em; color: #0056b3;">Firma del Instalador</h3>
+                            ${firmaImage}
+                         </div>
+
+                        <div style="margin-top: 40px; font-size: 0.8em; color: #6c757d; text-align: center; border-top: 1px solid #eee; padding-top: 15px;">
+                            <p>Este documento es una confirmación oficial de la entrega del equipo móvil.</p>
+                            <p>© ${new Date().getFullYear()} E4E Soluciones - Todos los derechos reservados</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // --- PDF Generation ---
+            async function generatePDF(data) {
+                // Check if jsPDF and html2canvas are loaded
+                if (typeof jspdf === 'undefined' || typeof html2canvas === 'undefined') {
+                    console.error("jsPDF or html2canvas library not loaded!");
+                    throw new Error("No se pudieron cargar las librerías para generar el PDF.");
+                }
+                 const { jsPDF } = jspdf; // Destructure jsPDF
+
+                 // Create a temporary container for rendering HTML off-screen
+                const tempContainer = document.createElement('div');
+                tempContainer.style.position = 'absolute';
+                tempContainer.style.left = '-9999px'; // Move off-screen
+                tempContainer.style.width = '600px'; // Define a width similar to A4 content area
+                tempContainer.innerHTML = generateDocumentHTML(data);
+                document.body.appendChild(tempContainer);
+
+                try {
+                     // Render the temporary container to a canvas
+                    const canvas = await html2canvas(tempContainer, {
+                        scale: 2, // Higher scale for better quality
+                        logging: false,
+                        useCORS: true,
+                        windowWidth: tempContainer.scrollWidth, // Use the calculated width
+                        windowHeight: tempContainer.scrollHeight // Use the calculated height
+                    });
+
+                    // Remove the temporary container
+                    document.body.removeChild(tempContainer);
+
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const imgWidth = pdfWidth - 20; // Add some margin (10mm each side)
+                    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                    let heightLeft = imgHeight;
+                    let position = 10; // Top margin
+
+                    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= (pdfHeight - 20); // Subtract first page height (with margins)
+
+                    // Add new pages if content exceeds one page
+                    while (heightLeft > 0) {
+                        position = heightLeft - imgHeight + 10; // Adjust position for next page
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                        heightLeft -= (pdfHeight - 20);
+                    }
+
+                    return pdf.output('blob'); // Return Blob for uploading
+
+                } catch (error) {
+                     // Ensure temporary container is removed even if error occurs
+                    if (document.body.contains(tempContainer)) {
+                        document.body.removeChild(tempContainer);
+                    }
+                    console.error('Error generating PDF:', error);
+                    throw new Error('Error al generar el documento PDF.'); // Re-throw a user-friendly error
+                }
+            }
+
+            // --- Supabase Interaction ---
+            async function saveToSupabase(formData) {
+                if (!supabase) {
+                    throw new Error('Supabase no está inicializado. Verifica tu configuración.');
+                }
+
+                // Prepare data for Supabase (exclude firmaDataUrl if storing separately or not at all)
+                const { firmaDataUrl, ...dbData } = formData;
+
+                 // Example: Insert into 'entregas_equipos' table
+                const { data, error } = await supabase
+                    .from('entregas_equipos') // *** YOUR TABLE NAME HERE ***
+                    .insert([dbData])         // Insert data as an array of objects
+                    .select();                // Optionally select the inserted data
+
+                if (error) {
+                    console.error('Error al guardar en Supabase:', error);
+                    throw new Error(`Error al guardar los datos: ${error.message}`);
+                }
+
+                console.log('Datos guardados en Supabase:', data);
+                return data[0]; // Return the first inserted record (if select() was used)
+            }
+
+            // Example: Function to upload PDF and update record
+            async function uploadPdfAndUpdateRecord(recordId, pdfBlob, fileName) {
+                if (!supabase || !recordId || !pdfBlob) {
+                     throw new Error('Faltan datos para subir el PDF.');
+                }
+
+                 const filePath = `entregas/${fileName}`; // Example path: deliveries/entrega_instalador_timestamp.pdf
+
+                 // 1. Upload the PDF blob
+                const { data: uploadData, error: uploadError } = await supabase
+                    .storage
+                    .from('documentos_entrega') // *** YOUR BUCKET NAME HERE ***
+                    .upload(filePath, pdfBlob, {
+                        cacheControl: '3600',
+                        upsert: true // Overwrite if file exists (optional)
+                    });
+
+                if (uploadError) {
+                    console.error('Error al subir PDF a Supabase Storage:', uploadError);
+                    // Optional: Attempt to delete the previously inserted record if upload fails?
+                    throw new Error(`Error al subir el PDF: ${uploadError.message}`);
+                }
+
+                console.log('PDF subido:', uploadData);
+
+                // 2. Get the public URL (or signed URL if needed)
+                // Note: Ensure RLS policies allow reading
+                const { data: urlData } = supabase
+                  .storage
+                  .from('documentos_entrega') // *** YOUR BUCKET NAME ***
+                  .getPublicUrl(filePath);
+
+                 if (!urlData || !urlData.publicUrl) {
+                     console.warn("No se pudo obtener la URL pública del PDF subido.");
+                     // Continue without updating the URL, or throw an error
+                 }
+
+                 const pdfUrl = urlData?.publicUrl;
+
+
+                 // 3. Update the original record with the PDF path/URL
+                const { data: updateData, error: updateError } = await supabase
+                    .from('entregas_equipos') // *** YOUR TABLE NAME HERE ***
+                    .update({
+                        pdf_path: filePath, // Store the path
+                        pdf_url: pdfUrl    // Store the public URL (optional)
+                     })
+                    .eq('id', recordId); // Match the record ID
+
+                if (updateError) {
+                    console.error('Error al actualizar registro con ruta PDF:', updateError);
+                    // Consider what to do here - the PDF is uploaded, but the link isn't saved
+                    throw new Error(`Error al actualizar la entrega con el enlace del PDF: ${updateError.message}`);
+                }
+
+                console.log('Registro actualizado con PDF:', updateData);
+                return pdfUrl; // Return the URL for confirmation
+            }
+
+            // --- Event Listeners ---
+
+            // Preview Button
+            previewBtn.addEventListener('click', function() {
+                if (!validateForm()) {
+                     showNotification('Por favor, corrige los errores antes de previsualizar.', false);
+                    return;
+                }
+                const formData = collectFormData();
+                previewContent.innerHTML = generateDocumentHTML(formData);
+                previewContainer.style.display = 'block';
+                window.scrollTo(0, document.body.scrollHeight); // Scroll to bottom to show preview
+            });
+
+            // Close Preview Button
+            closePreviewBtn.addEventListener('click', function() {
+                previewContainer.style.display = 'none';
+                previewContent.innerHTML = ''; // Clear content
+            });
+
+             // Form Submission
+            entregaForm.addEventListener('submit', async function(e) {
+                e.preventDefault(); // Prevent default HTML form submission
+
+                if (!validateForm()) {
+                    showNotification('Por favor, completa todos los campos requeridos y firma.', false);
+                    return;
+                }
+
+                if (!supabase) {
+                     showNotification('La conexión con la base de datos no está lista. Verifica la configuración.', false);
+                     configModal.style.display = 'block'; // Show config again
+                    return;
+                }
+
+                 loadingOverlay.style.display = 'flex'; // Show loading spinner
+                disableFormActions(); // Disable buttons during processing
+
+                try {
+                    const formData = collectFormData();
+
+                     // 1. Generate PDF (as Blob)
+                    const pdfBlob = await generatePDF(formData);
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const pdfFileName = `entrega_${formData.nombreInstalador.replace(/\s+/g, '_')}_${timestamp}.pdf`;
+
+
+                     // 2. Save Form Data to Database (excluding signature image data if storing PDF)
+                     const insertedRecord = await saveToSupabase(formData);
+                     if (!insertedRecord || !insertedRecord.id) {
+                         throw new Error("No se pudo obtener el ID del registro guardado.");
+                     }
+                     const recordId = insertedRecord.id;
+
+                    // 3. Upload PDF to Storage and update record
+                     const pdfUrl = await uploadPdfAndUpdateRecord(recordId, pdfBlob, pdfFileName);
+
+                    // 4. Success Feedback
+                    showNotification('¡Entrega confirmada y documento guardado exitosamente!', true);
+
+                     // 5. Reset Form
+                    entregaForm.reset();
+                    signaturePad.clear();
+                    otroModeloContainer.style.display = 'none'; // Reset 'Otro' field visibility
+                    previewContainer.style.display = 'none'; // Hide preview if open
+                    previewContent.innerHTML = '';
+                    clearErrors();
+
+
+                } catch (error) {
+                    console.error('Error en el proceso de entrega:', error);
+                    showNotification(`Error: ${error.message}`, false);
+                } finally {
+                     loadingOverlay.style.display = 'none'; // Hide loading spinner regardless of outcome
+                     enableFormActions(); // Re-enable buttons
+                }
+            });
+
+        }); // End DOMContentLoaded
+    </script>
+
+</body>
+</html>
